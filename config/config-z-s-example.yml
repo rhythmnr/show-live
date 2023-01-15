@@ -1,0 +1,13 @@
+email:
+  from: xx@qq.com
+  password: password
+  server: server
+  port: 25
+  to: xx@qq.com
+
+ad_code: 310100 # 上海
+url: https://kylin.zhengzai.tv
+db_dir: db
+log: 
+  log_suffix: zhengzai
+  log_dir: log

@@ -1,0 +1,14 @@
+email:
+  from: xx@qq.com
+  password: password
+  server: server
+  port: 25
+  to: xx@qq.com
+
+city_code: 156310000 # 上海
+url: https://api.simullink.com
+db_dir: db
+tags_selected:  ["摇滚","民谣","电子","爵士","流行"]
+log: 
+  log_suffix: simullink
+  log_dir: log
