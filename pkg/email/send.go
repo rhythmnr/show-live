@@ -22,7 +22,8 @@ func (e *EmailSender) Send(title, content string) error {
 	m.SetHeader("To", e.Conf.To)
 
 	m.SetHeader("Subject", title)
-	m.SetBody("text/plain", content)
+
+	m.SetBody("text/html", content)
 
 	d := gomail.NewPlainDialer(e.Conf.Server, e.Conf.Port, e.Conf.From, e.Conf.Password)
 	err := d.DialAndSend(m)

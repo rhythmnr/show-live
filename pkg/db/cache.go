@@ -23,7 +23,7 @@ func InitCache(dir string) (*Cache, error) {
 
 	exists, err := utils.PathExists(dir)
 	if err != nil {
-		return nil, fmt.Errorf("check if dir exists  error %v", err)
+		return nil, fmt.Errorf("check if dir exists error %v", err)
 	}
 	var c = cache.New(5*time.Minute, 10*time.Minute)
 	if !exists {
@@ -47,8 +47,8 @@ func InitCache(dir string) (*Cache, error) {
 	}, nil
 }
 
-func (c *Cache) SetKey(key string, endTime time.Time) error {
-	c.Set(key, endTime.Unix(), -1)
+func (c *Cache) SetKey(key string, value interface{}) error {
+	c.Set(key, value, -1)
 	return nil
 }
 
@@ -58,6 +58,18 @@ func (c *Cache) Exists(key string) (bool, error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+func (c *Cache) GetValue(key string) (interface{}, error) {
+	v, ok := c.Get(key)
+	if !ok {
+		return false, nil
+	}
+	return v, nil
+}
+
+func (c *Cache) GetEventByValue(value int64) ([]string, error) {
+	return nil, nil
 }
 
 func (c *Cache) Exit() error {

@@ -1,0 +1,29 @@
+email:
+  from: xx@qq.com
+  password: password
+  server: server
+  port: 25
+  to: xx@qq.com
+
+city: ['上海']
+tags_selected: [
+    '流行',
+    '独立',
+    '电子',
+    '摇滚',
+    '爵士',
+    # '世界音乐',
+    '民谣',
+    '朋克',
+    '金属',
+    '布鲁斯',
+    '极端金属',
+    '灵魂乐',
+    '核',
+  ]
+initial_event_id: 194980
+db_file: showstart.db
+log:
+  log_suffix: showstart
+  log_dir: logs
+maxNotFoundCount: 2 # 某个活动ID后的连续n活动都不存在的话，则视这个ID为最大活动ID，并将ID存储到数据库
