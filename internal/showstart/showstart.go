@@ -189,6 +189,10 @@ func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error
 			Time: time}, ErrorNotInterested
 	}
 	title := doc.Find(prefix + "div.title").Text()
+	if strings.Contains(title, "夜猫俱乐部") {
+		return &utils.Event{
+			Time: time}, ErrorNotInterested
+	}
 	artist := doc.Find(prefix + "p:nth-child(3) > a").Text()
 	price := doc.Find("#__layout > section > main > div > div.product > div > div.buy > div.price-tags").Text()
 	return &utils.Event{
