@@ -55,6 +55,7 @@ func main() {
 		log.Logger.Info("no new event to send, finish.........")
 		return
 	}
+	log.Logger.Infof("ready to notify, content: %s", content(events, msg))
 
 	if err := e.Send(fmt.Sprintf("秀动上新了%d个演出", len(events)), content(events, msg)); err != nil {
 		log.Logger.Errorf("send email error %v", err)
