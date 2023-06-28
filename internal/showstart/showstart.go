@@ -59,7 +59,6 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 	if initialEventID.(int64) > c.initEventID {
 		c.initEventID = initialEventID.(int64)
 	}
-	// fmt.Println(".........c.initEventID......", c.initEventID)
 	events := make([]*utils.Event, 0)
 	eventID := c.initEventID - 1
 	consistentNonexistEventCount := int64(0)
@@ -75,19 +74,16 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 			continue
 		}
 		if value == EventPushed || value == EventNotInterested {
-			// fmt.Println(eventID, "........EventPushed or EventNotInterested......exists in db")
 			continue
 		}
 		e, err := c.requestEvent(eventURL(eventID), eventID)
 		if err != nil {
 			if err == ErrorNotInterested {
-				// fmt.Println(eventID, "..........not interested...........")
 				consistentNonexistEventCount = 0
 				c.d.SetKey(keyInDB, EventNotInterested)
 				continue
 			}
 			if err == Error404 {
-				// fmt.Println(eventID, "..........not exist...........")
 				consistentNonexistEventCount++
 				c.d.SetKey(keyInDB, Evenet404)
 				continue
@@ -95,7 +91,6 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 			return nil, "", err
 		}
 		consistentNonexistEventCount = 0
-		// fmt.Println(eventID, ".........append..........")
 		c.d.SetKey(keyInDB, EventPushed)
 		filEventURL(eventID, e)
 		events = append(events, e)
@@ -130,7 +125,6 @@ func (c *ShowStart) Check404Event() ([]*utils.Event, error) {
 		if err != nil {
 			return nil, err
 		}
-		// fmt.Println("...Check404Event...404...eventID.......", eventID)
 		keyInDB := fmt.Sprintf("showstart_eventid_%d", eventID)
 		e, err := c.requestEvent(eventURL(eventID), eventID)
 		if err != nil {
@@ -201,33 +195,4 @@ func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error
 		Artist: artist,
 		Site:   site,
 		Price:  price}, nil
-
-	// title := "title"
-	// time := "time"
-	// artist := "artist"
-	// site := "site"
-	// price := "price"
-
-	// // found := false
-	// switch eventID {
-	// case 195707, 195708, 195712:
-	// 	// 存在且满足条件
-	// 	// found = true
-	// 	return &utils.Event{
-	// 		Name:   title,
-	// 		Time:   time,
-	// 		Artist: artist,
-	// 		Site:   site,
-	// 		Price:  price,
-	// 	}, nil
-	// case 195709, 195710, 195711, 195713:
-	// 	// 存在但不满足条件
-	// 	// found = false
-	// 	return &utils.Event{
-	// 		Time: time}, ErrorNotInterested
-	// 	// 不存在
-	// case 195714, 195715, 195716, 195717:
-	// 	return nil, Error404
-	// }
-	// return nil, Error404
 }

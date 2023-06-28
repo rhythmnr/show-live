@@ -5,3 +5,4 @@ config-s.yml
 config-z.yml
 config-showstart.yml
 showstart.db
+web/

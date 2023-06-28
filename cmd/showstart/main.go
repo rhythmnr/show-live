@@ -29,6 +29,7 @@ func main() {
 		}
 	}
 	log.InitLogger(config.Log.LogSuffix, config.Log.LogDir)
+	log.Logger.Info("service is ready to run, start.........")
 	d, err := db.InitSqlite(config.DBFile)
 	if err != nil {
 		log.Logger.Errorf("init cache error %v", err)
@@ -51,14 +52,14 @@ func main() {
 		return
 	}
 	if len(events) == 0 {
-		log.Logger.Info("no new event to send")
+		log.Logger.Info("no new event to send, finish.........")
 		return
 	}
 
 	if err := e.Send(fmt.Sprintf("秀动上新了%d个演出", len(events)), content(events, msg)); err != nil {
 		log.Logger.Errorf("send email error %v", err)
 	}
-	log.Logger.Infof("%d event sent", len(events))
+	log.Logger.Infof("%d event sent, finish.........", len(events))
 }
 
 func content(events []*utils.Event, msg string) string {
