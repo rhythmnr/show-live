@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -70,7 +71,7 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 		keyInDB := eventKeyInDB(eventID)
 		value, err := c.d.GetValue(keyInDB)
 		if err != nil {
-			log.Logger.Errorf("check if %s exists in db error", keyInDB, err)
+			log.Logger.Errorf("check if %s exists in db error %v", keyInDB, err)
 			continue
 		}
 		if value == EventPushed || value == EventNotInterested {
@@ -88,7 +89,7 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 				c.d.SetKey(keyInDB, Evenet404)
 				continue
 			}
-			return nil, "", err
+			return nil, "", fmt.Errorf("请求演出报错，ID：%d，错误：%v", eventID, err)
 		}
 		consistentNonexistEventCount = 0
 		c.d.SetKey(keyInDB, EventPushed)
@@ -149,6 +150,7 @@ var Error404 = errors.New("404")
 var ErrorNotInterested = errors.New("event is not interested")
 
 func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error) {
+	time.Sleep(3 * time.Second)
 	res, err := http.Get(url)
 	if err != nil {
 		return nil, err
