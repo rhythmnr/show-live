@@ -47,7 +47,7 @@ func eventURL(id int64) string {
 	return fmt.Sprintf("%s/%d", url, id)
 }
 
-func filEventURL(id int64, e *utils.Event) {
+func fillEventURL(id int64, e *utils.Event) {
 	e.WebURL = fmt.Sprintf("https://www.showstart.com/event/%d", id)
 	e.WebViewURL = fmt.Sprintf("https://wap.showstart.com/pages/activity/detail/detail?activityId=%d", id)
 }
@@ -93,7 +93,7 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 		}
 		consistentNonexistEventCount = 0
 		c.d.SetKey(keyInDB, EventPushed)
-		filEventURL(eventID, e)
+		fillEventURL(eventID, e)
 		events = append(events, e)
 	}
 	initialID := eventID - int64(consistentNonexistEventCount) - 1
@@ -140,7 +140,7 @@ func (c *ShowStart) Check404Event() ([]*utils.Event, error) {
 			return nil, err
 		}
 		c.d.SetKey(keyInDB, EventPushed)
-		filEventURL(eventID, e)
+		fillEventURL(eventID, e)
 		events = append(events, e)
 	}
 	return events, nil
@@ -149,18 +149,34 @@ func (c *ShowStart) Check404Event() ([]*utils.Event, error) {
 var Error404 = errors.New("404")
 var ErrorNotInterested = errors.New("event is not interested")
 
+var maxRetryTimes = 5
+
 func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error) {
-	time.Sleep(3 * time.Second)
-	res, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != 200 {
-		if res.StatusCode == 404 {
-			return nil, Error404
+	var retryTimes = 0
+	var res *http.Response
+	for {
+		time.Sleep(time.Second)
+		retryTimes++
+		var err error
+		res, err = http.Get(url)
+		if err != nil {
+			return nil, err
 		}
-		return nil, fmt.Errorf("status code error: %d %s", res.StatusCode, res.Status)
+		defer res.Body.Close()
+		if res.StatusCode == 200 {
+			break
+		}
+		if res.StatusCode != 200 {
+			if res.StatusCode == 404 {
+				return nil, Error404
+			}
+			if retryTimes >= maxRetryTimes {
+				return nil, fmt.Errorf("status code error: %d %s", res.StatusCode, res.Status)
+			}
+		}
+		if retryTimes >= maxRetryTimes {
+			break
+		}
 	}
 	doc, err := goquery.NewDocumentFromReader(res.Body)
 	if err != nil {
@@ -175,7 +191,16 @@ func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error
 			labels := doc.Find(prefix + "div.label").Text()
 			for _, v := range c.includeLabels {
 				if strings.Contains(labels, v) {
-					found = true
+					// 对于市外演出，只关注下午开场的
+					if strings.Contains(time, "12:00") || strings.Contains(time, "12:30") ||
+						strings.Contains(time, "13:00") || strings.Contains(time, "13:30") ||
+						strings.Contains(time, "14:00") || strings.Contains(time, "14:30") ||
+						strings.Contains(time, "15:00") || strings.Contains(time, "15:30") ||
+						strings.Contains(time, "16:00") || strings.Contains(time, "16:30") ||
+						strings.Contains(time, "17:00") || strings.Contains(time, "17:30") ||
+						strings.Contains(time, "18:00") || strings.Contains(time, "18:30") {
+						found = true
+					}
 				}
 			}
 		}
@@ -185,7 +210,7 @@ func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error
 			Time: time}, ErrorNotInterested
 	}
 	title := doc.Find(prefix + "div.title").Text()
-	if strings.Contains(title, "夜猫俱乐部") {
+	if strings.Contains(title, "夜猫俱乐部") || strings.Contains(title, "【JZ Club】") {
 		return &utils.Event{
 			Time: time}, ErrorNotInterested
 	}
