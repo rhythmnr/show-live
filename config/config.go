@@ -1,13 +1,15 @@
 package config
 
 type ShowStart struct {
-	Email            EmailConfig `yaml:"email"`
-	City             []string    `yaml:"city"`
-	TagsSelected     []string    `yaml:"tags_selected"`
-	InitialEventID   int64       `yaml:"initial_event_id,omitempty"`
-	DBFile           string      `yaml:"db_file"`
-	Log              Log         `yaml:"log"`
-	MaxNotFoundCount int64       `yaml:"maxNotFoundCount"`
+	Email                EmailConfig `yaml:"email"`
+	City                 []string    `yaml:"city"`
+	TagsSelected         []string    `yaml:"tags_selected"`
+	InitialEventID       int64       `yaml:"initial_event_id,omitempty"`
+	DBFile               string      `yaml:"db_file"`
+	Log                  Log         `yaml:"log"`
+	MaxNotFoundCount     int64       `yaml:"maxNotFoundCount"`
+	Max404CountToCheck   int64       `yaml:"max404CountToCheck"`
+	OtherCityInAfternoon []string    `yaml:"otherCityInAfternoon"`
 }
 
 type Simullink struct {

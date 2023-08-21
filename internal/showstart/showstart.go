@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -17,20 +18,25 @@ import (
 )
 
 type ShowStart struct {
-	d                db.DB
-	includeLabels    []string
-	city             []string
-	initEventID      int64
-	MaxNotFoundCount int64
+	d                    db.DB
+	includeLabels        []string
+	city                 []string
+	otherCityInAfternoon []string
+	initEventID          int64
+	MaxNotFoundCount     int64
+	Max404CountToCheck   int64
 }
 
-func NewShowStartGeter(d db.DB, tags []string, city []string, initEventID, MaxNotFoundCount int64) *ShowStart {
+func NewShowStartGeter(d db.DB, tags []string, city, otherCityInAfternoon []string,
+	initEventID, MaxNotFoundCount, Max404CountToCheck int64) *ShowStart {
 	return &ShowStart{
-		d:                d,
-		includeLabels:    tags,
-		city:             city,
-		initEventID:      initEventID,
-		MaxNotFoundCount: MaxNotFoundCount,
+		d:                    d,
+		includeLabels:        tags,
+		city:                 city,
+		otherCityInAfternoon: otherCityInAfternoon,
+		initEventID:          initEventID,
+		MaxNotFoundCount:     MaxNotFoundCount,
+		Max404CountToCheck:   Max404CountToCheck,
 	}
 }
 
@@ -71,7 +77,7 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 		keyInDB := eventKeyInDB(eventID)
 		value, err := c.d.GetValue(keyInDB)
 		if err != nil {
-			log.Logger.Errorf("check if %s exists in db error %v", keyInDB, err)
+			log.Logger.Errorf("检查键 %s 是否在数据库中存在时出错 %v", keyInDB, err)
 			continue
 		}
 		if value == EventPushed || value == EventNotInterested {
@@ -119,6 +125,7 @@ func (c *ShowStart) Check404Event() ([]*utils.Event, error) {
 	if err != nil {
 		return nil, err
 	}
+	eventInt := make([]int64, 0, len(eventStr))
 	re := regexp.MustCompile(`\d+`)
 	for _, e := range eventStr {
 		match := re.FindString(e)
@@ -126,6 +133,24 @@ func (c *ShowStart) Check404Event() ([]*utils.Event, error) {
 		if err != nil {
 			return nil, err
 		}
+		eventInt = append(eventInt, eventID)
+	}
+	sort.Slice(eventInt, func(i, j int) bool {
+		return eventInt[i] < eventInt[j]
+	})
+	if len(eventInt) > int(c.Max404CountToCheck) {
+		eventInt = eventInt[len(eventInt)-int(c.Max404CountToCheck):]
+		// eventInt = eventInt[:c.Max404CountToCheck]
+	}
+	// if len(eventInt) < int(c.Max404CountToCheck) {
+	// 	firstItem := eventInt[0]
+	// 	for i := int64(0); i < c.Max404CountToCheck-int64(len(eventInt)); i++ {
+	// 		eventInt = append([]int64{firstItem - 1 - i}, eventInt...)
+	// 	}
+	// } else {
+	// 	eventInt = eventInt[:c.Max404CountToCheck]
+	// }
+	for _, eventID := range eventInt {
 		keyInDB := fmt.Sprintf("showstart_eventid_%d", eventID)
 		e, err := c.requestEvent(eventURL(eventID), eventID)
 		if err != nil {
@@ -188,6 +213,16 @@ func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error
 	var found = false
 	for _, v := range c.city {
 		if strings.HasPrefix(site, v) {
+			labels := doc.Find(prefix + "div.label").Text()
+			for _, v := range c.includeLabels {
+				if strings.Contains(labels, v) {
+					found = true
+				}
+			}
+		}
+	}
+	for _, v := range c.otherCityInAfternoon {
+		if !found && strings.HasPrefix(site, v) {
 			labels := doc.Find(prefix + "div.label").Text()
 			for _, v := range c.includeLabels {
 				if strings.Contains(labels, v) {

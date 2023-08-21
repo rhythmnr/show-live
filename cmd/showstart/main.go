@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
+	"time"
 
 	"gopkg.in/yaml.v2"
 
@@ -15,11 +16,15 @@ import (
 	"show-live/utils"
 )
 
+const (
+	emailTryTimes = 10
+)
+
 func main() {
 	var config config.ShowStart
 	configFilePath := flag.String("config", "config-showstart.yml", "config file")
 	if configFilePath != nil {
-		configFile, err := ioutil.ReadFile(*configFilePath)
+		configFile, err := os.ReadFile(*configFilePath)
 		if err != nil {
 			log.Logger.Fatal(err)
 		}
@@ -29,38 +34,55 @@ func main() {
 		}
 	}
 	log.InitLogger(config.Log.LogSuffix, config.Log.LogDir)
-	log.Logger.Info("service is ready to run, start.........")
+	log.Logger.Info("服务准备运行，启动中.........")
 	d, err := db.InitSqlite(config.DBFile)
 	if err != nil {
-		log.Logger.Errorf("init cache error %v", err)
+		log.Logger.Errorf("初始化数据库错误 %v", err)
 		return
 	}
 	defer func() {
 		if err := d.Exit(); err != nil {
-			log.Logger.Errorf("db exits error %v", err)
+			log.Logger.Errorf("数据库退出过程中出错 %v", err)
 		}
 	}()
 
-	c := showstart.NewShowStartGeter(d, config.TagsSelected, config.City, config.InitialEventID, config.MaxNotFoundCount)
-	events, msg, err := c.GetEventsToNotify()
 	e := email.NewEmailSender(config.Email)
+	c := showstart.NewShowStartGeter(d, config.TagsSelected, config.City, config.OtherCityInAfternoon,
+		config.InitialEventID, config.MaxNotFoundCount, config.Max404CountToCheck)
+	events, msg, err := c.GetEventsToNotify()
 	if err != nil {
 		log.Logger.Errorf("get events to notify error %v", err)
-		if err := e.Send("秀动获取最新演出出错了", err.Error()); err != nil {
-			log.Logger.Errorf("send email error %v", err)
+		if err := trySendEmail(e, "秀动获取最新演出出错了", err.Error()); err != nil {
+			log.Logger.Errorf("发送邮件失败 %v", err)
 		}
 		return
 	}
 	if len(events) == 0 {
-		log.Logger.Info("no new event to send, finish.........")
+		log.Logger.Info("没有活动需要通知，程序返回.........")
 		return
 	}
-	log.Logger.Infof("ready to notify, content: %s", content(events, msg))
-
-	if err := e.Send(fmt.Sprintf("秀动上新了%d个演出", len(events)), content(events, msg)); err != nil {
-		log.Logger.Errorf("send email error %v", err)
+	log.Logger.Infof("准备通知，通知内容为: %s", content(events, msg))
+	if err := trySendEmail(e, fmt.Sprintf("秀动上新了%d个演出", len(events)), content(events, msg)); err == nil {
+		log.Logger.Infof("成功通知了 %d 个活动........", len(events))
 	}
-	log.Logger.Infof("%d event sent, finish.........", len(events))
+}
+
+func trySendEmail(e *email.EmailSender, title string, content string) error {
+	var errToReturn error
+	for i := 0; i < emailTryTimes; i++ {
+		err := e.Send(title, content)
+		if err == nil {
+			break
+		}
+		if err != nil {
+			log.Logger.Errorf("发送邮件失败 %v, 第 %d 次失败", err, i+1)
+		}
+		if i == emailTryTimes-1 {
+			errToReturn = err
+		}
+		time.Sleep(time.Second)
+	}
+	return errToReturn
 }
 
 func content(events []*utils.Event, msg string) string {

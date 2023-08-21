@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"show-live/pkg/log"
@@ -27,9 +27,9 @@ func Request(url, method string, postBody interface{}, out interface{}) error {
 	if err != nil {
 		return fmt.Errorf("do request error %v", err)
 	}
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Logger.Errorf("read response body error", err)
+		log.Logger.Errorf("读取响应body出错 %v", err)
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("unmarshal response body error %v", err)
