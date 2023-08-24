@@ -43,6 +43,7 @@ func NewShowStartGeter(d db.DB, tags []string, city, otherCityInAfternoon []stri
 const EventPushed = int64(1)
 const EventNotInterested = int64(2)
 const Evenet404 = int64(3)
+const EvenetErrorWhenRequest = int64(4)
 
 func eventKeyInDB(id int64) string {
 	return fmt.Sprintf("showstart_eventid_%d", id)
@@ -69,6 +70,7 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 	events := make([]*utils.Event, 0)
 	eventID := c.initEventID - 1
 	consistentNonexistEventCount := int64(0)
+	var errMsg string
 	for {
 		eventID++
 		if consistentNonexistEventCount == c.MaxNotFoundCount {
@@ -95,7 +97,10 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 				c.d.SetKey(keyInDB, Evenet404)
 				continue
 			}
-			return nil, "", fmt.Errorf("请求演出报错，ID：%d，错误：%v", eventID, err)
+			// 这个部分在出错的时候，返回错误内容，并在数据库里将活动标记为出错
+			errMsg += fmt.Sprintf("请求演出报错，ID：%d，错误：%v\n", eventID, err)
+			c.d.SetKey(keyInDB, EvenetErrorWhenRequest)
+			continue
 		}
 		consistentNonexistEventCount = 0
 		c.d.SetKey(keyInDB, EventPushed)
@@ -106,7 +111,7 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 	if err := c.d.SetKey("showstart_initial_eventid", initialID); err != nil {
 		return nil, "", err
 	}
-	events404, err := c.Check404Event()
+	events404, err := c.Check404AndErrorEvent()
 	if err != nil {
 		return nil, "", err
 	}
@@ -114,17 +119,22 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 		events = append(events, e)
 	}
 	lastID, _ := c.d.GetValue("showstart_initial_eventid")
-	msg := fmt.Sprintf("遍历开始ID：%d，遍历结束ID：%d，数据库存储ID：%d",
+	msg := errMsg + fmt.Sprintf("遍历开始ID：%d，遍历结束ID：%d，数据库存储ID：%d",
 		c.initEventID, eventID-1, lastID)
 	return events, msg, nil
 }
 
-func (c *ShowStart) Check404Event() ([]*utils.Event, error) {
+func (c *ShowStart) Check404AndErrorEvent() ([]*utils.Event, error) {
 	events := make([]*utils.Event, 0)
 	eventStr, err := c.d.GetEventByValue(Evenet404)
 	if err != nil {
 		return nil, err
 	}
+	eventErrStr, err := c.d.GetEventByValue(EvenetErrorWhenRequest)
+	if err != nil {
+		return nil, err
+	}
+	eventStr = append(eventStr, eventErrStr...)
 	eventInt := make([]int64, 0, len(eventStr))
 	re := regexp.MustCompile(`\d+`)
 	for _, e := range eventStr {
@@ -162,7 +172,8 @@ func (c *ShowStart) Check404Event() ([]*utils.Event, error) {
 			if err == Error404 {
 				continue
 			}
-			return nil, err
+			c.d.SetKey(keyInDB, EvenetErrorWhenRequest)
+			continue
 		}
 		c.d.SetKey(keyInDB, EventPushed)
 		fillEventURL(eventID, e)

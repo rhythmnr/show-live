@@ -46,9 +46,9 @@ func main() {
 		}
 	}()
 
-	e := email.NewEmailSender(config.Email)
 	c := showstart.NewShowStartGeter(d, config.TagsSelected, config.City, config.OtherCityInAfternoon,
 		config.InitialEventID, config.MaxNotFoundCount, config.Max404CountToCheck)
+	e := email.NewEmailSender(config.Email)
 	events, msg, err := c.GetEventsToNotify()
 	if err != nil {
 		log.Logger.Errorf("get events to notify error %v", err)
