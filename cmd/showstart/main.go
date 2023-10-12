@@ -21,6 +21,7 @@ const (
 )
 
 func main() {
+	startTime := time.Now()
 	var config config.ShowStart
 	configFilePath := flag.String("config", "config-showstart.yml", "config file")
 	if configFilePath != nil {
@@ -57,13 +58,16 @@ func main() {
 		}
 		return
 	}
+	endTime := time.Now()
 	if len(events) == 0 {
-		log.Logger.Info("没有活动需要通知，程序返回.........")
-		return
+		log.Logger.Info("没有活动需要通知.........")
 	}
-	log.Logger.Infof("准备通知，通知内容为: %s", content(events, msg))
-	if err := trySendEmail(e, fmt.Sprintf("秀动上新了%d个演出", len(events)), content(events, msg)); err == nil {
+	cont := content(startTime, endTime, events, msg)
+	log.Logger.Infof("准备通知，通知内容为: %s", cont)
+	if err := trySendEmail(e, fmt.Sprintf("秀动上新了%d个演出", len(events)), cont); err == nil {
 		log.Logger.Infof("成功通知了 %d 个活动........", len(events))
+	} else {
+		log.Logger.Infof("通知活动时出错：%v", err)
 	}
 }
 
@@ -85,7 +89,11 @@ func trySendEmail(e *email.EmailSender, title string, content string) error {
 	return errToReturn
 }
 
-func content(events []*utils.Event, msg string) string {
+func content(start, end time.Time, events []*utils.Event, msg string) string {
+	time := fmt.Sprintf("<p>开始运行时间：%s，结束时间：%s</p>", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
+	if len(events) == 0 {
+		return time + "<p>没有活动需要通知</p>" + fmt.Sprintf("<p>%s<p>", msg)
+	}
 	r := "<p>购票前务必先看大麦与确认是否有空观看，即使显示独家也要确认大麦！</p>"
 	for _, e := range events {
 		r += fmt.Sprintf("<p>🤜<a href=\"%s\"><font color=green></strong>%s<strong></font></a>，<strong>演出时间</strong>：%s，"+
