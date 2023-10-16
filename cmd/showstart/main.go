@@ -94,7 +94,7 @@ func content(start, end time.Time, events []*utils.Event, msg string) string {
 	if len(events) == 0 {
 		return time + "<p>没有活动需要通知</p>" + fmt.Sprintf("<p>%s<p>", msg)
 	}
-	r := "<p>购票前务必先看大麦与确认是否有空观看，即使显示独家也要确认大麦！</p>"
+	r := fmt.Sprintf("%s<p>购票前务必先看大麦与确认是否有空观看，即使显示独家也要确认大麦！</p>", time)
 	for _, e := range events {
 		r += fmt.Sprintf("<p>🤜<a href=\"%s\"><font color=green></strong>%s<strong></font></a>，<strong>演出时间</strong>：%s，"+
 			"<strong>艺人</strong>： %s，<strong>场地</strong>：%s，<strong>票价</strong>：%s，<a href=\"%s\">App内查看详情</a></p>",
