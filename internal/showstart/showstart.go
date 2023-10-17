@@ -130,7 +130,7 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 		events = append(events, e)
 	}
 	lastID, _ := c.d.GetValue("showstart_initial_eventid")
-	msg := errMsg + fmt.Sprintf("遍历开始ID：%d，遍历结束ID：%d，数据库存储ID：%d",
+	msg := errMsg + fmt.Sprintf("遍历开始ID：%d，遍历结束ID：%d，数据库存储ID：%s",
 		c.initEventID, eventID-1, lastID)
 	return events, msg, nil
 }
