@@ -22,7 +22,8 @@ type sqliteHandler struct {
 
 type event struct {
 	Event  string
-	Status int64
+	Name   string
+	Status string
 }
 
 func (*event) tableName() string {
@@ -48,14 +49,15 @@ func InitSqlite(dbFile string) (*sqliteHandler, error) {
 	}, nil
 }
 
-func (s *sqliteHandler) SetKey(key string, value interface{}) error {
+func (s *sqliteHandler) SetKey(key, name string, value string) error {
 	r := &event{}
 	results := s.db.Table(r.tableName()).Where("event = ?", key).First(r)
 	if results.Error != nil {
 		if results.Error == gorm.ErrRecordNotFound {
 			results := s.db.Table(r.tableName()).Create(&event{
 				Event:  key,
-				Status: value.(int64),
+				Name:   name,
+				Status: value,
 			})
 			if results.Error != nil {
 				return results.Error
@@ -63,7 +65,8 @@ func (s *sqliteHandler) SetKey(key string, value interface{}) error {
 		}
 	} else {
 		if err := s.db.Model(&r).Where("event = ?", key).
-			UpdateColumn("status", value.(int64)).Error; err != nil {
+			UpdateColumn("name", name).
+			UpdateColumn("status", value).Error; err != nil {
 			return err
 		}
 	}
@@ -85,16 +88,16 @@ func (s *sqliteHandler) Exists(key string) (bool, error) {
 	return true, nil
 }
 
-func (s *sqliteHandler) GetValue(key string) (interface{}, error) {
-	var status int64
+func (s *sqliteHandler) GetValue(key string) (string, error) {
+	var status string
 	if err := s.db.Model(&event{}).Where("event = ?", key).
 		Select("status").Scan(&status).Error; err != nil {
-		return 0, err
+		return "", err
 	}
 	return status, nil
 }
 
-func (s *sqliteHandler) GetEventByValue(value int64) ([]string, error) {
+func (s *sqliteHandler) GetEventByValue(value string) ([]string, error) {
 	var events []string
 	if err := s.db.Model(&event{}).Where("status = ?", value).
 		Select("event").Scan(&events).Error; err != nil {

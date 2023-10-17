@@ -40,10 +40,10 @@ func NewShowStartGeter(d db.DB, tags []string, city, otherCityInAfternoon []stri
 	}
 }
 
-const EventPushed = int64(1)
-const EventNotInterested = int64(2)
-const Evenet404 = int64(3)
-const EvenetErrorWhenRequest = int64(4)
+const EventPushed = "已推送"
+const EventNotInterested = "不感兴趣"
+const Evenet404 = "404"
+const EvenetErrorWhenRequest = "请求活动时报错"
 
 func eventKeyInDB(id int64) string {
 	return fmt.Sprintf("showstart_eventid_%d", id)
@@ -64,8 +64,15 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	if initialEventID.(int64) > c.initEventID {
-		c.initEventID = initialEventID.(int64)
+	var initID int64
+	if initialEventID != "" {
+		initID, err = strconv.ParseInt(initialEventID, 10, 64)
+		if err != nil {
+			return nil, "", fmt.Errorf("转换初试ID为int出错 %v", err)
+		}
+	}
+	if initID > c.initEventID {
+		c.initEventID = initID
 	}
 	events := make([]*utils.Event, 0)
 	eventID := c.initEventID - 1
@@ -86,29 +93,33 @@ func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
 			continue
 		}
 		e, err := c.requestEvent(eventURL(eventID), eventID)
+		name := "未知"
+		if e != nil {
+			name = e.Name
+		}
 		if err != nil {
 			if err == ErrorNotInterested {
 				consistentNonexistEventCount = 0
-				c.d.SetKey(keyInDB, EventNotInterested)
+				c.d.SetKey(keyInDB, name, EventNotInterested)
 				continue
 			}
 			if err == Error404 {
 				consistentNonexistEventCount++
-				c.d.SetKey(keyInDB, Evenet404)
+				c.d.SetKey(keyInDB, name, Evenet404)
 				continue
 			}
 			// 这个部分在出错的时候，返回错误内容，并在数据库里将活动标记为出错
 			errMsg += fmt.Sprintf("请求演出报错，ID：%d，错误：%v\n", eventID, err)
-			c.d.SetKey(keyInDB, EvenetErrorWhenRequest)
+			c.d.SetKey(keyInDB, name, EvenetErrorWhenRequest)
 			continue
 		}
 		consistentNonexistEventCount = 0
-		c.d.SetKey(keyInDB, EventPushed)
+		c.d.SetKey(keyInDB, name, EventPushed)
 		fillEventURL(eventID, e)
 		events = append(events, e)
 	}
 	initialID := eventID - int64(consistentNonexistEventCount) - 1
-	if err := c.d.SetKey("showstart_initial_eventid", initialID); err != nil {
+	if err := c.d.SetKey("showstart_initial_eventid", "占位", fmt.Sprintf("%d", initialID)); err != nil {
 		return nil, "", err
 	}
 	events404, err := c.Check404AndErrorEvent()
@@ -163,19 +174,23 @@ func (c *ShowStart) Check404AndErrorEvent() ([]*utils.Event, error) {
 	for _, eventID := range eventInt {
 		keyInDB := fmt.Sprintf("showstart_eventid_%d", eventID)
 		e, err := c.requestEvent(eventURL(eventID), eventID)
+		name := "未知"
+		if e != nil {
+			name = e.Name
+		}
 		if err != nil {
 			if err == ErrorNotInterested {
-				c.d.SetKey(keyInDB, EventNotInterested)
+				c.d.SetKey(keyInDB, name, EventNotInterested)
 				// 正常标记到数据库
 				continue
 			}
 			if err == Error404 {
 				continue
 			}
-			c.d.SetKey(keyInDB, EvenetErrorWhenRequest)
+			c.d.SetKey(keyInDB, name, EvenetErrorWhenRequest)
 			continue
 		}
-		c.d.SetKey(keyInDB, EventPushed)
+		c.d.SetKey(keyInDB, name, EventPushed)
 		fillEventURL(eventID, e)
 		events = append(events, e)
 	}

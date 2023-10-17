@@ -47,7 +47,7 @@ func InitCache(dir string) (*Cache, error) {
 	}, nil
 }
 
-func (c *Cache) SetKey(key string, value interface{}) error {
+func (c *Cache) SetKey(key, name string, value interface{}) error {
 	c.Set(key, value, -1)
 	return nil
 }
