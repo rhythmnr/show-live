@@ -4,5 +4,6 @@ mac上运行：
 ```
 export CGO_ENABLED=1                
 gvm use go1.19
+cd cmd/showstart
 go run .
 ```

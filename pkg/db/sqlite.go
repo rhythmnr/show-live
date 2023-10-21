@@ -49,7 +49,7 @@ func InitSqlite(dbFile string) (*sqliteHandler, error) {
 	}, nil
 }
 
-func (s *sqliteHandler) SetKey(key, name string, value string) error {
+func (s *sqliteHandler) SetKey(key, name, value string) error {
 	r := &event{}
 	results := s.db.Table(r.tableName()).Where("event = ?", key).First(r)
 	if results.Error != nil {
@@ -65,8 +65,11 @@ func (s *sqliteHandler) SetKey(key, name string, value string) error {
 		}
 	} else {
 		if err := s.db.Model(&r).Where("event = ?", key).
-			UpdateColumn("name", name).
 			UpdateColumn("status", value).Error; err != nil {
+			return err
+		}
+		if err := s.db.Model(&r).Where("event = ?", key).
+			UpdateColumn("name", name).Error; err != nil {
 			return err
 		}
 	}
