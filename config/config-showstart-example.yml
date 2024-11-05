@@ -23,6 +23,8 @@ tags_selected: [
   ]
 initial_event_id: 194980
 db_file: showstart.db
+save_cover: true
+cover_dir: xxx
 log:
   log_suffix: showstart
   log_dir: logs

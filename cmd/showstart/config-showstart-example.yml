@@ -1,12 +1,11 @@
 email:
-  from: 11@qq.com
-  password: xx
+  from: xxx@qq.com
+  password: eeee
   server: smtp.qq.com
   port: 25
-  to: 22@qq.com
+  to: eee@qq.com
 
-city: ['上海'] # 关注该城市的所有感兴趣的活动
-otherCityInAfternoon: ['杭州'] # 关注该城市下午场的活动
+city_code: [21] # 21是上海
 tags_selected: [
     '流行',
     '独立',
@@ -22,10 +21,7 @@ tags_selected: [
     '灵魂乐',
     '核',
   ]
-initial_event_id: 206385
 db_file: showstart.db
 log:
   log_suffix: showstart
   log_dir: logs
-maxNotFoundCount: 1 # 某个活动ID后的连续n活动都不存在的话，则视这个ID为最大活动ID，并将ID存储到数据库
-max404CountToCheck: 1 # 往前重新验证的404活动的数量，以防止一些活动之前为404但是最近有有了内容为非404

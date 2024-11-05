@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 
@@ -20,23 +18,17 @@ import (
 type ShowStart struct {
 	d                    db.DB
 	includeLabels        []string
-	city                 []string
+	cityCode             []int
 	otherCityInAfternoon []string
-	initEventID          int64
 	MaxNotFoundCount     int64
 	Max404CountToCheck   int64
 }
 
-func NewShowStartGeter(d db.DB, tags []string, city, otherCityInAfternoon []string,
-	initEventID, MaxNotFoundCount, Max404CountToCheck int64) *ShowStart {
+func NewShowStartGeter(d db.DB, tags []string, city []int) *ShowStart {
 	return &ShowStart{
-		d:                    d,
-		includeLabels:        tags,
-		city:                 city,
-		otherCityInAfternoon: otherCityInAfternoon,
-		initEventID:          initEventID,
-		MaxNotFoundCount:     MaxNotFoundCount,
-		Max404CountToCheck:   Max404CountToCheck,
+		d:             d,
+		includeLabels: tags,
+		cityCode:      city,
 	}
 }
 
@@ -59,141 +51,61 @@ func fillEventURL(id int64, e *utils.Event) {
 	e.WebViewURL = fmt.Sprintf("https://wap.showstart.com/pages/activity/detail/detail?activityId=%d", id)
 }
 
-func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, string, error) {
-	initialEventID, err := c.d.GetValue(fmt.Sprintf("showstart_initial_eventid"))
-	if err != nil {
-		return nil, "", err
-	}
-	var initID int64
-	if initialEventID != "" {
-		initID, err = strconv.ParseInt(initialEventID, 10, 64)
-		if err != nil {
-			return nil, "", fmt.Errorf("转换初试ID为int出错 %v", err)
-		}
-	}
-	if initID > c.initEventID {
-		c.initEventID = initID
-	}
+func (c *ShowStart) GetEventsToNotify() ([]*utils.Event, error) {
+	pageSize := 20
 	events := make([]*utils.Event, 0)
-	eventID := c.initEventID - 1
-	consistentNonexistEventCount := int64(0)
+	page := 0
 	var errMsg string
-	for {
-		eventID++
-		if consistentNonexistEventCount == c.MaxNotFoundCount {
-			break
-		}
-		keyInDB := eventKeyInDB(eventID)
-		value, err := c.d.GetValue(keyInDB)
-		if err != nil {
-			log.Logger.Errorf("检查键 %s 是否在数据库中存在时出错 %v", keyInDB, err)
-			continue
-		}
-		if value == EventPushed || value == EventNotInterested {
-			continue
-		}
-		e, err := c.requestEvent(eventURL(eventID), eventID)
-		name := "未知"
-		if e != nil {
-			name = e.Name
-		}
-		if err != nil {
-			if err == ErrorNotInterested {
-				consistentNonexistEventCount = 0
-				c.d.SetKey(keyInDB, name, EventNotInterested)
+	fmt.Println(".........c.cityCode.......", len(c.cityCode))
+	for _, city := range c.cityCode {
+		for {
+			page++
+			eventIDs, err := c.requestEventList(page, pageSize, city)
+			if err != nil {
+				log.Logger.Errorf("请求城市 %d 的第 %d 出错 %v", city, page, err)
 				continue
 			}
-			if err == Error404 {
-				consistentNonexistEventCount++
-				c.d.SetKey(keyInDB, name, Evenet404)
-				continue
+			if len(eventIDs) == 0 {
+				break
 			}
-			// 这个部分在出错的时候，返回错误内容，并在数据库里将活动标记为出错
-			errMsg += fmt.Sprintf("请求演出报错，ID：%d，错误：%v\n", eventID, err)
-			c.d.SetKey(keyInDB, name, EvenetErrorWhenRequest)
-			continue
-		}
-		consistentNonexistEventCount = 0
-		c.d.SetKey(keyInDB, name, EventPushed)
-		fillEventURL(eventID, e)
-		events = append(events, e)
-	}
-	initialID := eventID - int64(consistentNonexistEventCount) - 1
-	if err := c.d.SetKey("showstart_initial_eventid", "占位", fmt.Sprintf("%d", initialID)); err != nil {
-		return nil, "", err
-	}
-	events404, err := c.Check404AndErrorEvent()
-	if err != nil {
-		return nil, "", err
-	}
-	for _, e := range events404 {
-		events = append(events, e)
-	}
-	lastID, _ := c.d.GetValue("showstart_initial_eventid")
-	msg := errMsg + fmt.Sprintf("遍历开始ID：%d，遍历结束ID：%d，数据库存储ID：%s",
-		c.initEventID, eventID-1, lastID)
-	return events, msg, nil
-}
+			for _, eventID := range eventIDs {
+				keyInDB := eventKeyInDB(eventID)
+				value, err := c.d.GetValue(keyInDB)
+				if err != nil {
+					log.Logger.Errorf("检查键 %s 是否在数据库中存在时出错 %v", keyInDB, err)
+					continue
+				}
 
-func (c *ShowStart) Check404AndErrorEvent() ([]*utils.Event, error) {
-	events := make([]*utils.Event, 0)
-	eventStr, err := c.d.GetEventByValue(Evenet404)
-	if err != nil {
-		return nil, err
-	}
-	eventErrStr, err := c.d.GetEventByValue(EvenetErrorWhenRequest)
-	if err != nil {
-		return nil, err
-	}
-	eventStr = append(eventStr, eventErrStr...)
-	eventInt := make([]int64, 0, len(eventStr))
-	re := regexp.MustCompile(`\d+`)
-	for _, e := range eventStr {
-		match := re.FindString(e)
-		eventID, err := strconv.ParseInt(match, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		eventInt = append(eventInt, eventID)
-	}
-	sort.Slice(eventInt, func(i, j int) bool {
-		return eventInt[i] < eventInt[j]
-	})
-	if len(eventInt) > int(c.Max404CountToCheck) {
-		eventInt = eventInt[len(eventInt)-int(c.Max404CountToCheck):]
-		// eventInt = eventInt[:c.Max404CountToCheck]
-	}
-	// if len(eventInt) < int(c.Max404CountToCheck) {
-	// 	firstItem := eventInt[0]
-	// 	for i := int64(0); i < c.Max404CountToCheck-int64(len(eventInt)); i++ {
-	// 		eventInt = append([]int64{firstItem - 1 - i}, eventInt...)
-	// 	}
-	// } else {
-	// 	eventInt = eventInt[:c.Max404CountToCheck]
-	// }
-	for _, eventID := range eventInt {
-		keyInDB := fmt.Sprintf("showstart_eventid_%d", eventID)
-		e, err := c.requestEvent(eventURL(eventID), eventID)
-		name := "未知"
-		if e != nil {
-			name = e.Name
-		}
-		if err != nil {
-			if err == ErrorNotInterested {
-				c.d.SetKey(keyInDB, name, EventNotInterested)
-				// 正常标记到数据库
-				continue
+				if value == EventPushed || value == EventNotInterested {
+					continue
+				}
+				e, err := c.requestEvent(eventURL(eventID))
+				name := "未知"
+				if e != nil {
+					name = e.Name
+				}
+				if err != nil {
+					if err == ErrorNotInterested {
+						c.d.SetKey(keyInDB, name, EventNotInterested)
+						continue
+					}
+					if err == Error404 {
+						c.d.SetKey(keyInDB, name, Evenet404)
+						continue
+					}
+					// 这个部分在出错的时候，返回错误内容，并在数据库里将活动标记为出错
+					errMsg += fmt.Sprintf("请求演出报错，ID：%d，错误：%v\n", eventID, err)
+					c.d.SetKey(keyInDB, name, EvenetErrorWhenRequest)
+					continue
+				}
+				c.d.SetKey(keyInDB, name, EventPushed)
+				fillEventURL(eventID, e)
+				events = append(events, e)
 			}
-			if err == Error404 {
-				continue
-			}
-			c.d.SetKey(keyInDB, name, EvenetErrorWhenRequest)
-			continue
+
 		}
-		c.d.SetKey(keyInDB, name, EventPushed)
-		fillEventURL(eventID, e)
-		events = append(events, e)
 	}
+
 	return events, nil
 }
 
@@ -202,11 +114,11 @@ var ErrorNotInterested = errors.New("event is not interested")
 
 var maxRetryTimes = 5
 
-func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error) {
+func (c *ShowStart) requestEvent(url string) (*utils.Event, error) {
 	var retryTimes = 0
 	var res *http.Response
 	for {
-		time.Sleep(time.Second)
+		// time.Sleep(time.Second)
 		retryTimes++
 		var err error
 		res, err = http.Get(url)
@@ -237,35 +149,13 @@ func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error
 	site := doc.Find(prefix + "p:nth-child(4) > a").Text()
 	time := strings.TrimPrefix(doc.Find(prefix+"p:nth-child(2)").Text(), "演出时间：")
 	var found = false
-	for _, v := range c.city {
-		if strings.HasPrefix(site, v) {
-			labels := doc.Find(prefix + "div.label").Text()
-			for _, v := range c.includeLabels {
-				if strings.Contains(labels, v) {
-					found = true
-				}
-			}
+	labels := doc.Find(prefix + "div.label").Text()
+	for _, v := range c.includeLabels {
+		if strings.Contains(labels, v) {
+			found = true
 		}
 	}
-	for _, v := range c.otherCityInAfternoon {
-		if !found && strings.HasPrefix(site, v) {
-			labels := doc.Find(prefix + "div.label").Text()
-			for _, v := range c.includeLabels {
-				if strings.Contains(labels, v) {
-					// 对于市外演出，只关注下午开场的
-					if strings.Contains(time, "12:00") || strings.Contains(time, "12:30") ||
-						strings.Contains(time, "13:00") || strings.Contains(time, "13:30") ||
-						strings.Contains(time, "14:00") || strings.Contains(time, "14:30") ||
-						strings.Contains(time, "15:00") || strings.Contains(time, "15:30") ||
-						strings.Contains(time, "16:00") || strings.Contains(time, "16:30") ||
-						strings.Contains(time, "17:00") || strings.Contains(time, "17:30") ||
-						strings.Contains(time, "18:00") || strings.Contains(time, "18:30") {
-						found = true
-					}
-				}
-			}
-		}
-	}
+
 	if !found {
 		return &utils.Event{
 			Time: time}, ErrorNotInterested
@@ -283,4 +173,48 @@ func (c *ShowStart) requestEvent(url string, eventID int64) (*utils.Event, error
 		Artist: artist,
 		Site:   site,
 		Price:  price}, nil
+}
+
+func (c *ShowStart) requestEventList(page, pageSize, cityCode int) ([]int64, error) {
+	url := fmt.Sprintf("https://www.showstart.com/event/list?pageNo=%d&pageSize=%d&cityCode=%d",
+		page, pageSize, cityCode)
+	fmt.Println("..........................", url)
+	res, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		return nil, errors.New(fmt.Sprintf("%s return %d code", url, res.StatusCode))
+	}
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("new document of query error: %v", err)
+	}
+	eventIDs := []int64{}
+	doc.Find("#__layout > section > main > div > div.list-box.clearfix").Children().Each(func(i int, s *goquery.Selection) {
+		// 检查是否是 a 标签
+		if goquery.NodeName(s) == "a" {
+			// 获取 href 属性
+			href, exists := s.Attr("href")
+			if !exists {
+				log.Logger.Errorf("%s中的第 %d 个元素的href不存在", url, i)
+				return
+			}
+			re := regexp.MustCompile(`/event/(\d+)`)
+			// 提取匹配的数字部分
+			matches := re.FindStringSubmatch(href)
+			if len(matches) > 1 {
+				r, err := strconv.ParseInt(matches[1], 10, 64)
+				if err != nil {
+					log.Logger.Errorf("转换 %s 为 int 失败 %v", matches[1], err)
+				} else {
+					eventIDs = append(eventIDs, r)
+				}
+			} else {
+				log.Logger.Errorf("正则匹配 %s 不符合预期，找不到活动ID", href)
+			}
+		}
+	})
+	return eventIDs, nil
 }

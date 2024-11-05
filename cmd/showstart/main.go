@@ -47,10 +47,9 @@ func main() {
 		}
 	}()
 
-	c := showstart.NewShowStartGeter(d, config.TagsSelected, config.City, config.OtherCityInAfternoon,
-		config.InitialEventID, config.MaxNotFoundCount, config.Max404CountToCheck)
+	c := showstart.NewShowStartGeter(d, config.TagsSelected, config.CityCode)
 	e := email.NewEmailSender(config.Email)
-	events, msg, err := c.GetEventsToNotify()
+	events, err := c.GetEventsToNotify()
 	if err != nil {
 		log.Logger.Errorf("get events to notify error %v", err)
 		if err := trySendEmail(e, "秀动获取最新演出出错了", err.Error()); err != nil {
@@ -62,7 +61,7 @@ func main() {
 	if len(events) == 0 {
 		log.Logger.Info("没有活动需要通知.........")
 	}
-	cont := content(startTime, endTime, events, msg)
+	cont := content(startTime, endTime, events)
 	log.Logger.Infof("准备通知，通知内容为: %s", cont)
 	if err := trySendEmail(e, fmt.Sprintf("秀动上新了%d个演出", len(events)), cont); err == nil {
 		log.Logger.Infof("成功通知了 %d 个活动........", len(events))
@@ -89,10 +88,10 @@ func trySendEmail(e *email.EmailSender, title string, content string) error {
 	return errToReturn
 }
 
-func content(start, end time.Time, events []*utils.Event, msg string) string {
+func content(start, end time.Time, events []*utils.Event) string {
 	time := fmt.Sprintf("<p>开始运行时间：%s，结束时间：%s</p>", start.Format("2006-01-02 15:04:05"), end.Format("2006-01-02 15:04:05"))
 	if len(events) == 0 {
-		return time + "<p>没有活动需要通知</p>" + fmt.Sprintf("<p>%s<p>", msg)
+		return time + "<p>没有活动需要通知</p>"
 	}
 	r := fmt.Sprintf("%s<p>购票前务必先看大麦与确认是否有空观看，即使显示独家也要确认大麦！</p>", time)
 	for _, e := range events {
@@ -101,6 +100,5 @@ func content(start, end time.Time, events []*utils.Event, msg string) string {
 			e.WebURL, e.Name, e.Time, e.Artist, e.Site, e.Price, e.WebViewURL,
 		)
 	}
-	r += fmt.Sprintf("<p>%s<p>", msg)
 	return r
 }
